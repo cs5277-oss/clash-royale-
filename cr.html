@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pixel Royale Final</title>
+<style>
+body{margin:0;background:#cce6ff;font-family:sans-serif;user-select:none;}
+canvas{display:block;margin:auto;background:#8bc34a;}
+</style>
+</head>
+<body>
+<canvas id="game" width="800" height="400"></canvas>
+<script>
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const WIDTH=800, HEIGHT=400;
+let playerTowerHP=100, enemyTowerHP=100;
+let playerElixir=10, enemyElixir=10;
+const ELIXIR_RATE=0.05;
+const LANES_Y=[100,200,300];
+
+const unitTypes={
+"Knight":{hp:30,dmg:10,speed:2,cost:3,color:"#2196F3",size:20,frames:2},
+"Archers":{hp:20,dmg:5,speed:3,cost:3,color:"#FFC107",size:15,frames:2},
+"Giant":{hp:60,dmg:20,speed:1,cost:5,color:"#9C27B0",size:30,frames:2},
+"Goblin":{hp:15,dmg:7,speed:4,cost:2,color:"#4CAF50",size:15,frames:2},
+"Valkyrie":{hp:50,dmg:15,speed:1.5,cost:4,color:"#FF5722",size:25,frames:2},
+"Wizard":{hp:25,dmg:12,speed:2.5,cost:5,color:"#3F51B5",size:20,frames:2},
+"BabyDragon":{hp:40,dmg:12,speed:2,cost:4,color:"#00BCD4",size:25,frames:2},
+"Prince":{hp:35,dmg:18,speed:3,cost:5,color:"#E91E63",size:20,frames:2},
+"MegaMinion":{hp:30,dmg:15,speed:2.5,cost:3,color:"#795548",size:20,frames:2},
+"MiniPekka":{hp:25,dmg:20,speed:2,cost:4,color:"#9E9E9E",size:20,frames:2},
+"Skeletons":{hp:10,dmg:5,speed:4,cost:1,color:"#607D8B",size:10,frames:2},
+"Cannon":{hp:50,dmg:15,speed:0,cost:3,color:"#FF9800",size:25,frames:1},
+"Tesla":{hp:40,dmg:12,speed:0,cost:4,color:"#00FF00",size:20,frames:1},
+"HogRider":{hp:45,dmg:20,speed:3,cost:4,color:"#F44336",size:25,frames:2},
+"Balloon":{hp:35,dmg:30,speed:2,cost:5,color:"#9C27B0",size:25,frames:2},
+"Miner":{hp:30,dmg:12,speed:2,cost:3,color:"#795548",size:20,frames:2},
+"SkeletonArmy":{hp:10,dmg:5,speed:3.5,cost:3,color:"#607D8B",size:10,frames:2},
+"Fireball":{hp:1,dmg:25,speed:0,cost:4,color:"#FF5722",spell:true,size:20},
+"Zap":{hp:1,dmg:15,speed:0,cost:2,color:"#00FFFF",spell:true,size:15},
+"IceSpirit":{hp:10,dmg:5,speed:4.5,cost:1,color:"#ADD8E6",spell:true,size:15}
+};
+
+const playerDeck=Object.keys(unitTypes);
+const enemyDeck=Object.keys(unitTypes);
+let playerCycle=playerDeck.slice(0,5);
+let enemyCycle=enemyDeck.slice(0,5);
+let playerNextIndex=5, enemyNextIndex=5;
+let units=[];
+
+class Unit{
+  constructor(x,y,type,owner){
+    this.x=x; this.y=y; this.hp=type.hp; this.dmg=type.dmg;
+    this.speed=type.speed; this.color=type.color; this.size=type.size;
+    this.owner=owner; this.type=type; this.frame=0;
+  }
+  move(){if(!this.type.spell)this.x+=this.owner=="player"?this.speed:-this.speed;}
+  draw(){
+    // Pixel-art style with some detail
+    ctx.fillStyle=this.color;
+    ctx.fillRect(this.x-this.size/2,this.y-this.size/2,this.size,this.size);
+    ctx.fillStyle="#000";
+    ctx.font="10px Arial";
+    ctx.fillText(this.hp,this.x-10,this.y-10);
+  }
+}
+
+let dragging=null,mouseX=0,mouseY=0;
+canvas.addEventListener('mousemove',e=>{mouseX=e.offsetX;mouseY=e.offsetY;});
+canvas.addEventListener('mousedown',e=>{
+  playerCycle.forEach((c,i)=>{
+    const cx=50+i*80, cy=HEIGHT-120;
+    if(e.offsetX>=cx && e.offsetX<=cx+60 && e.offsetY>=cy && e.offsetY<=cy+90) dragging=c;
+  });
+});
+canvas.addEventListener('mouseup',e=>{
+  if(dragging){
+    const lane=LANES_Y.reduce((a,b)=>Math.abs(b-e.offsetY)<Math.abs(a-e.offsetY)?b:a,LANES_Y[0]);
+    spawnUnit(dragging,"player",50,lane);
+    playerCycle[playerCycle.indexOf(dragging)]=playerDeck[playerNextIndex%playerDeck.length];
+    playerNextIndex++; dragging=null;
+  }
+});
+
+function spawnUnit(name,owner,x,y){
+  const type=unitTypes[name];
+  if(owner=="player"&&playerElixir>=type.cost){
+    type.spell?spellEffect(name,owner,x,y):(units.push(new Unit(x,y,type,owner)),playerElixir-=type.cost);
+  }
+  if(owner=="enemy"&&enemyElixir>=type.cost){
+    type.spell?spellEffect(name,owner,x,y):(units.push(new Unit(x,y,type,owner)),enemyElixir-=type.cost);
+  }
+}
+
+function spellEffect(name,owner,x,y){
+  const targets=units.filter(u=>(owner=="player"?u.owner=="enemy":u.owner=="player")&&Math.abs(u.y-y)<50&&Math.abs(u.x-x)<50);
+  targets.forEach(t=>{t.hp-=unitTypes[name].dmg;});
+  ctx.fillStyle=unitTypes[name].color;
+  ctx.beginPath(); ctx.arc(x,y,30,0,2*Math.PI); ctx.fill();
+}
+
+let lastEnemySpawn=0;
+function enemyAI(){
+  if(Date.now()-lastEnemySpawn>2000){
+    const lane=LANES_Y[Math.floor(Math.random()*LANES_Y.length)];
+    const card=enemyCycle[Math.floor(Math.random()*enemyCycle.length)];
+    spawnUnit(card,"enemy",750,lane);
+    enemyCycle[enemyCycle.indexOf(card)]=enemyDeck[enemyNextIndex%enemyDeck.length];
+    enemyNextIndex++; lastEnemySpawn=Date.now();
+  }
+}
+
+function update(){
+  ctx.clearRect(0,0,WIDTH,HEIGHT);
+  ctx.strokeStyle="#555"; LANES_Y.forEach(y=>{ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(WIDTH,y);ctx.stroke();});
+
+  ctx.fillStyle="blue"; ctx.fillRect(30,LANES_Y[1]-25,20,50);
+  ctx.fillStyle="red"; ctx.fillRect(WIDTH-50,LANES_Y[1]-25,20,50);
+  ctx.fillStyle="#000"; ctx.font="14px Arial";
+  ctx.fillText("Player Tower: "+playerTowerHP,30,LANES_Y[1]-40);
+  ctx.fillText("Enemy Tower: "+enemyTowerHP,WIDTH-150,LANES_Y[1]-40);
+
+  units.forEach((u,i)=>{
+    u.move();
+    units.forEach((v,j)=>{if(i!==j&&u.owner!==v.owner&&Math.abs(u.x-v.x)<20&&Math.abs(u.y-v.y)<20){v.hp-=u.dmg; u.hp-=v.dmg;}});
+    if(u.owner=="player"&&u.x>=WIDTH-50){enemyTowerHP-=u.dmg; u.hp=0;}
+    if(u.owner=="enemy"&&u.x<=50){playerTowerHP-=u.dmg; u.hp=0;}
+    if(u.hp>0) u.draw();
+  });
+  units=units.filter(u=>u.hp>0);
+
+  playerCycle.forEach((c,i)=>{
+    const cx=50+i*80,cy=HEIGHT-120;
+    ctx.fillStyle="#eee"; ctx.fillRect(cx,cy,60,90);
+    ctx.fillStyle="#000"; ctx.fillText(c,cx+5,cy+35);
+    ctx.fillStyle="green"; ctx.fillText(unitTypes[c].cost,cx+5,cy+60);
+  });
+
+  if(dragging){ctx.fillStyle="#eee"; ctx.fillRect(mouseX-30,mouseY-45,60,90);ctx.fillStyle="#000";ctx.fillText(dragging,mouseX-25,mouseY-10);}
+
+  playerElixir=Math.min(playerElixir+ELIXIR_RATE,10);
+  enemyElixir=Math.min(enemyElixir+ELIXIR_RATE,10);
+  ctx.fillStyle="green"; ctx.fillText("Elixir: "+Math.floor(playerElixir),50,HEIGHT-10);
+
+  enemyAI();
+
+  if(playerTowerHP<=0||enemyTowerHP<=0){ctx.fillStyle="#000";ctx.font="30px Arial";ctx.fillText(playerTowerHP<=0?"You Lose!":"You Win!",WIDTH/2-70,HEIGHT/2); return;}
+
+  requestAnimationFrame(update);
+}
+update();
+</script>
+</body>
+</html>
