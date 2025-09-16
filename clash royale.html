@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Clash Royale Clone</title>
+  <style>
+    body { margin: 0; background: #3cb043; overflow: hidden; font-family: sans-serif; }
+    #battlefield {
+      position: relative;
+      width: 100vw;
+      height: 80vh;
+      background: #76b852;
+      display: grid;
+      grid-template-rows: 1fr 1fr 1fr;
+      border-top: 10px solid #654321;
+      border-bottom: 10px solid #654321;
+    }
+    .lane {
+      position: relative;
+      border-top: 2px dashed #fff;
+      border-bottom: 2px dashed #fff;
+    }
+    .troop {
+      position: absolute;
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: blue;
+    }
+    .enemy {
+      background: red;
+    }
+    .projectile {
+      position: absolute;
+      width: 10px; height: 10px;
+      background: yellow;
+      border-radius: 50%;
+    }
+    #hand {
+      position: fixed;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 10px;
+    }
+    .card {
+      width: 60px; height: 80px;
+      background: white;
+      border: 2px solid black;
+      display: flex; align-items: center; justify-content: center;
+      cursor: grab;
+    }
+  </style>
+</head>
+<body>
+  <div id="battlefield">
+    <div class="lane" id="lane-0"></div>
+    <div class="lane" id="lane-1"></div>
+    <div class="lane" id="lane-2"></div>
+  </div>
+  <div id="hand"></div>
+
+  <script>
+    const lanes = document.querySelectorAll('.lane');
+    const hand = document.getElementById('hand');
+    const deck = Array(30).fill(0).map((_,i)=>({id:i, name:`Troop ${i+1}`}));
+    let handCards = [];
+
+    function drawHand() {
+      hand.innerHTML = '';
+      while(handCards.length < 4 && deck.length > 0) {
+        handCards.push(deck.shift());
+      }
+      handCards.forEach(card => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.draggable = true;
+        div.innerText = card.name;
+        div.ondragstart = e => e.dataTransfer.setData('text/plain', JSON.stringify(card));
+        hand.appendChild(div);
+      });
+    }
+
+    lanes.forEach((lane, index) => {
+      lane.ondragover = e => e.preventDefault();
+      lane.ondrop = e => {
+        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+        spawnTroop(index, data);
+        handCards = handCards.filter(c => c.id !== data.id);
+        deck.push(data); // cycle back to deck
+        drawHand();
+      };
+    });
+
+    function spawnTroop(laneIndex, card) {
+      const lane = lanes[laneIndex];
+      const troop = document.createElement('div');
+      troop.className = 'troop';
+      troop.style.left = '0px';
+      troop.style.top = `${lane.clientHeight/2 - 15}px`;
+      lane.appendChild(troop);
+      let x = 0;
+      function move() {
+        x += 1;
+        troop.style.left = x + 'px';
+        if(x < lane.clientWidth - 30) requestAnimationFrame(move);
+        else lane.removeChild(troop);
+      }
+      requestAnimationFrame(move);
+    }
+
+    drawHand();
+  </script>
+</body>
+</html>
